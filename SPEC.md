@@ -100,10 +100,16 @@ type KaspaProviderInfo = {
 type KaspaProviderDetail = { info: KaspaProviderInfo; provider: KaspaProvider };
 ```
 
-- The wallet **MUST** freeze `detail` (and `detail.info`) so page scripts cannot swap the provider out.
-- The wallet **SHOULD** provide a stable `rdns`; without it a dApp cannot silently restore the session
-  after a reload (there is no stable identity to match).
-- The dApp **SHOULD** dedupe announces by `info.rdns ?? info.uuid`, first-announce-wins.
+- The wallet **MUST** freeze `detail` (and `detail.info`) so a page script cannot mutate an announce
+  **in flight** (swap the `provider` or a field on an already-dispatched event). Freezing protects the
+  integrity of a *single* announce only — it does **not** authenticate the announcer, and a hostile
+  script can still dispatch its **own** competing announce. Freezing is not a trust signal (see §8).
+- The wallet **SHOULD** provide a stable `rdns`; without it a dApp cannot restore the session after a
+  reload (there is no stable identity to match). `rdns` is a convenience key, **not** an authenticity
+  claim — any script can announce any `rdns` (see §8).
+- The dApp **SHOULD** dedupe announces by `info.rdns ?? info.uuid` (first-announce-wins). Because `rdns`
+  is spoofable, a dApp **MAY** surface a *second* announce for an already-seen `rdns` as a warning rather
+  than silently discarding it.
 
 ## 6. Network ids
 
@@ -122,11 +128,21 @@ unavoidable, would ship under a **new event name** — never by mutating these.
 
 - `name`/`icon` are **display hints, not trust signals**. An announce proves a provider is *present*, not
   that it is *who it claims to be*. dApps MUST NOT grant trust based on them, and MUST refuse non-`data:`
-  icons (a remote URL is a tracking/spoofing vector).
-- Any page script can dispatch `kaspa:announceProvider`. Treat the provider as untrusted until the user
-  explicitly connects; the connect prompt is the trust boundary.
+  icons (a remote URL is a tracking/spoofing vector). The reference `requestKaspaWallets` **enforces this
+  for you** — it strips any non-`data:` icon (delivers it as `''`) before handing the announce to your
+  callback.
+- Any page script can dispatch `kaspa:announceProvider`, including one that claims another wallet's
+  `name`/`rdns`. Treat the provider as untrusted until the user explicitly connects; the wallet's own
+  connect/sign prompt — rendered by the extension, outside page control — is the trust boundary, not the
+  announce.
+- **Silent session restore is display-only.** A dApp MAY use a remembered `rdns` to silently re-populate
+  *displayed* accounts via `getAccounts()` after a reload, but it **MUST** require a fresh explicit user
+  connect gesture before calling `signPskt` (or any signing). Never route a signature to a provider the
+  user did not explicitly (re-)select this session — `rdns` alone is spoofable and is not consent.
 - The fund-safety rules in §4 are the load-bearing security property. A wallet that signs sloppily can
-  lose user funds even though the handshake itself is benign.
+  lose user funds even though the handshake itself is benign. Note a spoofed in-page provider still
+  **cannot forge a signature** (it holds no keys); the realistic risk of announce-spoofing is *display
+  spoofing / phishing setup*, which the connect-gesture boundary above is designed to contain.
 
 ## 9. Reference implementation & adoption
 

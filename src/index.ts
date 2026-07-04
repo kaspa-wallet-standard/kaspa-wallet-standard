@@ -32,7 +32,9 @@ export type KaspaProviderInfo = {
   uuid: string;
   /** Human-readable wallet name shown in pickers, e.g. "Kastle". */
   name: string;
-  /** Wallet icon as a `data:` URI (SVG/PNG). dApps should refuse to render remote URLs. */
+  /** Wallet icon as a `data:` URI (SVG/PNG) — a DISPLAY hint, never a trust signal. A remote URL is a
+   *  tracking/spoofing vector, so the dApp-side {@link requestKaspaWallets} STRIPS any non-`data:` icon
+   *  (delivers it as `''`) — a dApp can never be handed a remote URL through the handshake. */
   icon: string;
   /** Reverse-DNS identifier, e.g. "com.kasware" — STABLE across page loads and versions. Strongly
    *  recommended: it is what lets a dApp silently restore a session with your wallet after a reload. */
@@ -102,12 +104,24 @@ export function announceKaspaWallet(info: KaspaProviderInfo, provider: KaspaProv
   return () => window.removeEventListener(KASPA_REQUEST_PROVIDER_EVENT, announce);
 }
 
+/** An icon is safe to render only as an inline `data:` URI. A remote URL is a tracking/spoofing vector
+ *  (SPEC §8), so the dApp-side handshake refuses it. */
+const isSafeIcon = (icon: unknown): icon is string => typeof icon === 'string' && /^data:/i.test(icon.trim());
+
 /**
  * dApp SIDE — register `onAnnounce` (fires once per announce event, including replays; dedupe by
  * `info.rdns ?? info.uuid` yourself), then request announcements from wallets already present. Keep the
  * subscription alive for the page lifetime to catch late-injecting wallets. Returns an unsubscribe.
- * Malformed announces (missing identity or `requestAccounts`) are dropped, never delivered. No-op
- * outside a window context.
+ *
+ * Two receiver-side safety filters run before an announce reaches `onAnnounce`:
+ *   • Malformed announces (missing `uuid`/`name`, or no `requestAccounts`) are dropped, never delivered.
+ *   • A non-`data:` `icon` (a remote-URL tracking/spoofing vector, SPEC §8) is STRIPPED to `''` — the
+ *     wallet is still surfaced, just without the unsafe icon. An absent or valid `data:` icon passes
+ *     through untouched (the announce stays the wallet's original frozen object).
+ *
+ * NEITHER filter authenticates the announcer: any page script can announce (SPEC §8), so treat a provider
+ * as untrusted until the user explicitly connects — that connect gesture is the trust boundary, not this
+ * handshake. No-op outside a window context.
  */
 export function requestKaspaWallets(onAnnounce: (detail: KaspaProviderDetail) => void): () => void {
   if (typeof window === 'undefined') return () => {};
@@ -115,6 +129,12 @@ export function requestKaspaWallets(onAnnounce: (detail: KaspaProviderDetail) =>
     const detail = (e as CustomEvent<KaspaProviderDetail>).detail;
     if (!detail?.info?.uuid || !detail?.info?.name) return;
     if (typeof detail.provider?.requestAccounts !== 'function') return;
+    if (detail.info.icon != null && !isSafeIcon(detail.info.icon)) {
+      // Strip the unsafe icon but keep the wallet: deliver a sanitized copy; the wallet's frozen
+      // original is left untouched (a valid/absent icon skips this and passes through frozen).
+      onAnnounce({ info: { ...detail.info, icon: '' }, provider: detail.provider });
+      return;
+    }
     onAnnounce(detail);
   };
   window.addEventListener(KASPA_ANNOUNCE_PROVIDER_EVENT, listener);

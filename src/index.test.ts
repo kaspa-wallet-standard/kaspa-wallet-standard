@@ -62,6 +62,24 @@ describe('discovery handshake', () => {
     expect(Object.isFrozen(captured.info)).toBe(true);
   });
 
+  it('passes a valid data: icon through untouched (announce stays the frozen original)', () => {
+    let captured: any;
+    track(requestKaspaWallets((d) => { captured = d; }));
+    track(announceKaspaWallet(info({ name: 'DataIcon' }), provider())); // info() carries a data: icon
+    expect(captured.info.icon).toBe('data:image/svg+xml;base64,PHN2Zy8+');
+    expect(Object.isFrozen(captured)).toBe(true);
+  });
+
+  it('strips a non-data: (remote URL) icon to "" but still surfaces the wallet', () => {
+    let captured: any;
+    track(requestKaspaWallets((d) => { captured = d; }));
+    // A wallet (or hostile script) announcing a remote-URL icon — a tracking/spoofing vector.
+    const detail = { info: { ...info({ name: 'RemoteIcon' }), icon: 'https://evil.example/track.png' }, provider: provider() };
+    window.dispatchEvent(new CustomEvent(KASPA_ANNOUNCE_PROVIDER_EVENT, { detail }));
+    expect(captured.info.name).toBe('RemoteIcon'); // wallet still delivered, not dropped
+    expect(captured.info.icon).toBe('');           // unsafe icon stripped before reaching the dApp
+  });
+
   it('stops delivering after unsubscribe', () => {
     const cb = vi.fn();
     const unsub = requestKaspaWallets(cb);

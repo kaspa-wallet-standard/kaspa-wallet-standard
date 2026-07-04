@@ -93,7 +93,10 @@ const unsubscribe = requestKaspaWallets(({ info, provider }) => {
 ```
 
 Then on click: `const [address] = await provider.requestAccounts();`. Capability-check optional methods
-before using them, and refuse any `info.icon` that isn't a `data:` URI.
+before using them. `requestKaspaWallets` already strips any non-`data:` `info.icon` for you (a remote URL
+is a tracking/spoofing vector), so what reaches your callback is safe to render. The announce is **not** an
+identity proof, though — any script can announce any name/rdns, so require an explicit user connect before
+signing and treat silent `getAccounts()` restore as display-only. See [SPEC §8](SPEC.md#8-security-considerations).
 
 ## Who's using it
 
