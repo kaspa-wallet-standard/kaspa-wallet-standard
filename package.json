@@ -1,0 +1,58 @@
+{
+  "name": "kaspa-wallet-standard",
+  "version": "0.1.0",
+  "description": "A proposed standard for dApp↔wallet interoperability on Kaspa: a provider interface plus an EIP-6963-style discovery handshake so any wallet can announce itself to any dApp. Zero dependencies.",
+  "license": "MIT",
+  "author": "Shawn Pearce",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "SPEC.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.11.6",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaspa-wallet-standard/kaspa-wallet-standard"
+  },
+  "homepage": "https://github.com/kaspa-wallet-standard/kaspa-wallet-standard#readme",
+  "bugs": {
+    "url": "https://github.com/kaspa-wallet-standard/kaspa-wallet-standard/issues"
+  },
+  "keywords": [
+    "kaspa",
+    "wallet",
+    "standard",
+    "dapp",
+    "provider",
+    "discovery",
+    "eip-6963",
+    "kip"
+  ]
+}
