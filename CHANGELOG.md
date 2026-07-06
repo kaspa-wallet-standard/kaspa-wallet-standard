@@ -1,8 +1,28 @@
 # Changelog
 
 All notable changes to this package are documented here. This project follows
-[Semantic Versioning](https://semver.org). The **wire contract stays frozen** (SPEC §7) — these are
-receiver-side hardening and documentation only; no event name or field type changes.
+[Semantic Versioning](https://semver.org).
+
+## 0.2.0
+
+### Changed — KIP-12 (BREAKING: clean cutover to canonical naming)
+
+This package is now the reference implementation of the revived
+[KIP-12](https://github.com/kaspanet/kips/pull/21) and speaks **only** its canonical names. The v0.1
+naming is retired outright — no dual-dispatch bridge — a break made deliberately while KRON (updated
+in lockstep) was the only deployed consumer:
+
+- **Announce event: `kaspa:provider`** (was `kaspa:announceProvider`). `announceKaspaWallet`
+  dispatches only it; `requestKaspaWallets` listens only to it.
+- **Network ids: the node's bare ids** — `mainnet` / `testnet-10` / `testnet-11` / `devnet`
+  (`KASPA_NETWORKS` values changed). New `normalizeKaspaNetworkId()` maps `kaspa_`-prefixed dialects
+  (e.g. KasWare's injected API) to canonical.
+- **Network-change event: `chainChanged`** (KIP-12 / EIP-1193 name); `networkChanged` removed from
+  the `on()` type.
+
+Migration from 0.1.x: bump, rebuild, and update any literal comparisons of event names or network
+ids to the values above. A 0.1.x peer will neither see nor be seen by a 0.2.0 peer — update both
+sides together.
 
 ## 0.1.1
 

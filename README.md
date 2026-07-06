@@ -5,8 +5,10 @@ any dApp can find any wallet — and any wallet can join every dApp — without 
 other. Inspired by Ethereum's [EIP-6963](https://eips.ethereum.org/EIPS/eip-6963) and Solana's
 [Wallet Standard](https://github.com/wallet-standard/wallet-standard).
 
-> **Status: proposed / draft**, open for community adoption and headed for a [KIP](https://github.com/kaspanet/kips).
-> The full specification is in **[SPEC.md](SPEC.md)**. The wire contract is frozen — see SPEC §7.
+> **Status: reference implementation of [KIP-12](https://github.com/kaspanet/kips/pull/21) (draft, under revival).**
+> This standard has been folded into KIP-12, which is now the authoritative specification; this package
+> implements it exactly — canonical names only (`kaspa:provider` announce, bare network ids,
+> `chainChanged`). [SPEC.md](SPEC.md) tracks the same contract. Versioning policy: SPEC §7.
 
 ```bash
 npm install kaspa-wallet-standard
@@ -55,7 +57,7 @@ const provider = {
   getPublicKey:    () => w.request('kas:get_account').then(a => a.publicKey),
   signMessage:     (m) => w.request('kas:sign_message', m),
   signPskt: ({ txJsonString, options }) => w.request('kas:sign_tx', {
-    networkId: /* your network id */ 'kaspa_testnet_10',
+    networkId: /* whatever id YOUR bridge expects — this is the wallet's own dialect */ 'testnet-10',
     txJson: txJsonString,
     scripts: options.signInputs.map(s => ({ inputIndex: s.index, scriptHex: '', signType: 'All' })),
   }),
@@ -74,7 +76,7 @@ const detail = Object.freeze({
   info: Object.freeze({ uuid: crypto.randomUUID(), name: 'YourWallet', icon: 'data:…', rdns: 'com.yourwallet' }),
   provider: window.yourwallet,
 });
-const announce = () => window.dispatchEvent(new CustomEvent('kaspa:announceProvider', { detail }));
+const announce = () => window.dispatchEvent(new CustomEvent('kaspa:provider', { detail }));
 window.addEventListener('kaspa:requestProvider', announce);
 announce();
 ```
@@ -108,10 +110,12 @@ Using it in your wallet or dApp? Open a PR to add yourself.
 
 ## Status & contributing
 
-This is a **proposed** standard. The goal is ratification as a KIP once the handshake is proven across at
-least two independently-developed wallets. If you're a wallet or dApp author — especially if you'd want a
-field changed **before** it freezes into a KIP — please [open an issue](../../issues). See
-[SPEC.md](SPEC.md) for the full contract, security model, and versioning policy.
+This package is the reference implementation of **KIP-12**, the (draft) Kaspa wallet provider and
+discovery standard — the original draft lives at [kaspanet/kips#21](https://github.com/kaspanet/kips/pull/21)
+and a revived, consolidated revision is being prepared with the original authors. The bar for
+ratification: the handshake proven across at least two independently-developed wallets. If you're a
+wallet or dApp author, review happens on the KIP; implementation issues are welcome
+[here](../../issues). See [SPEC.md](SPEC.md) for the contract, security model, and versioning policy.
 
 ## License
 

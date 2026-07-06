@@ -5,6 +5,7 @@ import {
   KASPA_ANNOUNCE_PROVIDER_EVENT,
   KASPA_REQUEST_PROVIDER_EVENT,
   KASPA_NETWORKS,
+  normalizeKaspaNetworkId,
   type KaspaProvider,
 } from './index';
 
@@ -88,10 +89,26 @@ describe('discovery handshake', () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
-  it('exposes the frozen event names and canonical network ids', () => {
-    expect(KASPA_ANNOUNCE_PROVIDER_EVENT).toBe('kaspa:announceProvider');
+  it('exposes the canonical (KIP-12) event names and network ids', () => {
+    expect(KASPA_ANNOUNCE_PROVIDER_EVENT).toBe('kaspa:provider');
     expect(KASPA_REQUEST_PROVIDER_EVENT).toBe('kaspa:requestProvider');
-    expect(KASPA_NETWORKS.MAINNET).toBe('kaspa_mainnet');
-    expect(KASPA_NETWORKS.TESTNET_10).toBe('kaspa_testnet_10');
+    expect(KASPA_NETWORKS.MAINNET).toBe('mainnet');
+    expect(KASPA_NETWORKS.TESTNET_10).toBe('testnet-10');
+  });
+
+  it('ignores the pre-KIP announce event name entirely (clean cutover)', () => {
+    const cb = vi.fn();
+    track(requestKaspaWallets(cb));
+    // A wallet built against the retired v0.1 contract — this package no longer listens to it.
+    window.dispatchEvent(new CustomEvent('kaspa:announceProvider', {
+      detail: Object.freeze({ info: Object.freeze(info({ name: 'OldWallet' })), provider: provider() }),
+    }));
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('normalizes kaspa_-prefixed network ids (KasWare dialect) to canonical', () => {
+    expect(normalizeKaspaNetworkId('kaspa_mainnet')).toBe('mainnet');
+    expect(normalizeKaspaNetworkId('kaspa_testnet_10')).toBe('testnet-10');
+    expect(normalizeKaspaNetworkId('testnet-10')).toBe('testnet-10'); // canonical passes through
   });
 });

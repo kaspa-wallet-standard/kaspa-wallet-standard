@@ -7,9 +7,12 @@
 //     per-wallet code, and any future wallet self-registers by dispatching one event.
 //
 // This package has ZERO runtime dependencies and is safe to import in Node (all browser access is guarded).
-// The wire contract — the two event names and the existing fields below — is FROZEN: it never changes.
-// Evolution happens only by adding new OPTIONAL fields. A wallet written against this file keeps working
-// against every future version.
+//
+// v0.2 — KIP-12. This package is the reference implementation of the revived KIP-12 and speaks ONLY its
+// canonical names: `kaspa:provider` announce, the node's bare network ids (`mainnet`, `testnet-10`),
+// `chainChanged`. The v0.1 names (`kaspa:announceProvider`, `kaspa_mainnet`, `networkChanged`) are gone —
+// a clean break, made while KRON was the only deployed consumer (updated in lockstep). From here the
+// wire contract evolves per KIP-12 itself: add-only fields/methods; breaking = new event name.
 
 // ============================================================================================
 // Part 1 — Provider interface
@@ -18,13 +21,19 @@
 /** Canonical network ids used by `getNetwork()` / `switchNetwork()`. String literals are the contract;
  *  this object is a convenience so integrators don't hand-type them. */
 export const KASPA_NETWORKS = {
-  MAINNET: 'kaspa_mainnet',
-  TESTNET_10: 'kaspa_testnet_10',
-  TESTNET_11: 'kaspa_testnet_11',
-  DEVNET: 'kaspa_devnet',
+  MAINNET: 'mainnet',
+  TESTNET_10: 'testnet-10',
+  TESTNET_11: 'testnet-11',
+  DEVNET: 'devnet',
 } as const;
 
 export type KaspaNetworkId = (typeof KASPA_NETWORKS)[keyof typeof KASPA_NETWORKS];
+
+/** Normalize any wallet-reported network id to the canonical KIP-12 form: legacy `kaspa_`-prefixed
+ *  variants (`kaspa_mainnet`, `kaspa_testnet_10` — v0.1 of this package, KasWare's injected API) map to
+ *  the node's bare ids (`mainnet`, `testnet-10`). Canonical ids pass through unchanged. */
+export const normalizeKaspaNetworkId = (id: string): string =>
+  id.startsWith('kaspa_') ? id.slice('kaspa_'.length).replace(/_/g, '-') : id;
 
 /** Identity a wallet announces about itself. `name`/`icon` are DISPLAY hints — never trust signals. */
 export type KaspaProviderInfo = {
@@ -73,7 +82,8 @@ export interface KaspaProvider {
   /** Sign ONLY the listed inputs of a Kaspa Safe-JSON transaction and return the signed Safe JSON. */
   signPskt?(arg: { txJsonString: string; options: { signInputs: KaspaSignInput[] } }): Promise<string>;
   disconnect?(origin?: string): Promise<void>;
-  on?(event: 'accountsChanged' | 'networkChanged', handler: (...args: any[]) => void): void;
+  /** `chainChanged` is the KIP-12 network-change event (payload: canonical network id). */
+  on?(event: 'accountsChanged' | 'chainChanged', handler: (...args: any[]) => void): void;
   removeListener?(event: string, handler: (...args: any[]) => void): void;
 }
 
@@ -83,8 +93,9 @@ export interface KaspaProvider {
 
 /** Dispatched on `window` by a dApp to ask all present wallets to (re-)announce themselves. */
 export const KASPA_REQUEST_PROVIDER_EVENT = 'kaspa:requestProvider';
-/** Dispatched on `window` by a wallet; `detail` is a frozen {@link KaspaProviderDetail}. */
-export const KASPA_ANNOUNCE_PROVIDER_EVENT = 'kaspa:announceProvider';
+/** Dispatched on `window` by a wallet; `detail` is a frozen {@link KaspaProviderDetail}.
+ *  KIP-12 canonical name. */
+export const KASPA_ANNOUNCE_PROVIDER_EVENT = 'kaspa:provider';
 
 /** The `detail` of a `kaspa:announceProvider` CustomEvent. */
 export type KaspaProviderDetail = { info: KaspaProviderInfo; provider: KaspaProvider };

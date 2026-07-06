@@ -1,11 +1,12 @@
 # Kaspa Wallet Standard
 
-**Status: Proposed (draft).** This is an open proposal for how Kaspa dApps and wallets discover and talk
-to each other. It is **not** (yet) a ratified [Kaspa Improvement Proposal](https://github.com/kaspanet/kips) —
-it is offered for community adoption and feedback, with the explicit goal of becoming a KIP once it has
-proven out across independent wallets. Comments, issues, and PRs are welcome.
+**Status: folded into [KIP-12](https://github.com/kaspanet/kips/pull/21) (draft, under revival).**
+This document began as an independent proposal and has since been consolidated into KIP-12, the
+Kaspa wallet provider and discovery standard — **the KIP is the authoritative specification**; this
+file tracks the same contract as the companion to the reference implementation in this package.
+Standards review happens on the KIP; implementation issues are welcome here.
 
-**Version:** 0.1 · **Wire contract:** frozen (see §7).
+**Version:** 0.2 · **Naming:** KIP-12 canonical only (see §7 for the versioning policy).
 
 ---
 
@@ -30,7 +31,7 @@ It has two parts: a **provider interface** (§3–4) and a **discovery handshake
 
 - **Provider** — the object a wallet injects/exposes that a dApp calls to get accounts, network, and
   signatures (§3).
-- **Announce** — a wallet advertising its provider via the `kaspa:announceProvider` event (§5).
+- **Announce** — a wallet advertising its provider via the `kaspa:provider` event (§5).
 - **dApp** — any web page that wants to use a Kaspa wallet.
 - Keywords **MUST**, **SHOULD**, **MAY** are used per [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -50,7 +51,7 @@ method is **optional** and MUST be capability-checked by the dApp (`typeof p.sig
 | `signMessage(msg): Promise<string>` | no | KIP-5 message signing → Schnorr signature hex. |
 | `signPskt({ txJsonString, options }): Promise<string>` | no | Sign specific inputs of a transaction (§4). |
 | `disconnect(origin?): Promise<void>` | no | Drop the site's authorization. |
-| `on / removeListener(event, handler)` | no | `accountsChanged`, `networkChanged`. |
+| `on / removeListener(event, handler)` | no | `accountsChanged`, `chainChanged`. |
 
 A wallet that implements only `requestAccounts` is valid — it will connect and display balances in a
 dApp, which simply disables features that need the missing methods.
@@ -74,7 +75,7 @@ array of `{ index, sighashType }`, and returns the re-serialized signed transact
 
 Two events on `window`, mirroring EIP-6963 replay semantics:
 
-- **`kaspa:announceProvider`** — a `CustomEvent` dispatched by the **wallet**. `detail` is a **frozen**
+- **`kaspa:provider`** — a `CustomEvent` dispatched by the **wallet**. `detail` is a **frozen**
   `{ info, provider }` (see §5.1). MUST be dispatched on load, and re-dispatched on every
   `kaspa:requestProvider`.
 - **`kaspa:requestProvider`** — a plain `Event` dispatched by the **dApp** to ask present wallets to
@@ -83,7 +84,7 @@ Two events on `window`, mirroring EIP-6963 replay semantics:
 **Sequence**
 
 1. On load, the wallet registers a `kaspa:requestProvider` listener that re-announces, then announces once.
-2. The dApp registers its `kaspa:announceProvider` listener (kept alive for the page lifetime), then
+2. The dApp registers its `kaspa:provider` listener (kept alive for the page lifetime), then
    dispatches `kaspa:requestProvider`.
 3. Late arrival is covered from both directions: a late wallet announces unprompted on load; a late dApp's
    request triggers a replay from every wallet already present.
@@ -113,16 +114,22 @@ type KaspaProviderDetail = { info: KaspaProviderInfo; provider: KaspaProvider };
 
 ## 6. Network ids
 
-Canonical strings (also exported as `KASPA_NETWORKS`):
+Canonical strings (also exported as `KASPA_NETWORKS`) — the node's own network ids, per KIP-12:
 
-`kaspa_mainnet` · `kaspa_testnet_10` · `kaspa_testnet_11` · `kaspa_devnet`
+`mainnet` · `testnet-10` · `testnet-11` · `devnet`
 
-## 7. Compatibility and versioning (frozen contract)
+Some injected wallet APIs speak a `kaspa_`-prefixed dialect (`kaspa_mainnet`, `kaspa_testnet_10`);
+adapters SHOULD normalize those to canonical — the package exports `normalizeKaspaNetworkId()` for
+exactly this.
 
-The **wire contract is frozen**: the two event names, and every field defined above, never change
-meaning or type. The standard evolves **only by adding new OPTIONAL fields/methods**. A wallet or dApp
-built against this document keeps working against every future version. Breaking changes, if ever
-unavoidable, would ship under a **new event name** — never by mutating these.
+## 7. Compatibility and versioning
+
+**v0.2 is a clean break to KIP-12 canonical naming** (announce event, network ids, change event) —
+made while this package's own deployments were the only consumers of the v0.1 names, which are
+retired outright (no dual bridge). From v0.2 the contract is stable under KIP-12's own rule: the
+event names and every field defined above never change meaning or type; the standard evolves **only
+by adding new OPTIONAL fields/methods**; breaking changes, if ever unavoidable, ship under a **new
+event name** — never by mutating these.
 
 ## 8. Security considerations
 
@@ -131,7 +138,7 @@ unavoidable, would ship under a **new event name** — never by mutating these.
   icons (a remote URL is a tracking/spoofing vector). The reference `requestKaspaWallets` **enforces this
   for you** — it strips any non-`data:` icon (delivers it as `''`) before handing the announce to your
   callback.
-- Any page script can dispatch `kaspa:announceProvider`, including one that claims another wallet's
+- Any page script can dispatch `kaspa:provider`, including one that claims another wallet's
   `name`/`rdns`. Treat the provider as untrusted until the user explicitly connects; the wallet's own
   connect/sign prompt — rendered by the extension, outside page control — is the trust boundary, not the
   announce.
@@ -152,9 +159,12 @@ unavoidable, would ship under a **new event name** — never by mutating these.
   discovery handshake in production, and ships built-in adapters for KasWare and Kastle behind the same
   provider interface.
 
-## 10. Path to standardization
+## 10. Standardization status
 
-This document is intended to graduate into a **KIP**. The bar we're aiming for before proposing
-ratification: the handshake proven across **at least two independently-developed wallets**, and the
-provider interface exercised by covenant-grade `signPskt` on-chain. Wallet and dApp authors who adopt it
-(or who want fields changed *before* it freezes into a KIP) are invited to open an issue.
+This document **has been folded into KIP-12** ([original draft PR](https://github.com/kaspanet/kips/pull/21);
+a revived, consolidated revision is being prepared with the original authors) — the KIP is where the
+standard lives and where review happens. The bar before proposing ratification stands: the handshake
+proven across **at least two independently-developed wallets** (in progress: KRON's dApp side against
+the Rift wallet PoC, plus the KasWare/Kastle adapters), and the provider interface exercised by
+covenant-grade `signPskt` on-chain. Wallet and dApp authors: raise standards questions on the KIP,
+implementation issues here.

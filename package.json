@@ -1,7 +1,7 @@
 {
   "name": "kaspa-wallet-standard",
-  "version": "0.1.1",
-  "description": "A proposed standard for dApp↔wallet interoperability on Kaspa: a provider interface plus an EIP-6963-style discovery handshake so any wallet can announce itself to any dApp. Zero dependencies.",
+  "version": "0.2.0",
+  "description": "A proposed standard for dApp\u2194wallet interoperability on Kaspa: a provider interface plus an EIP-6963-style discovery handshake so any wallet can announce itself to any dApp. Zero dependencies.",
   "license": "MIT",
   "author": "Shawn Pearce",
   "type": "module",
