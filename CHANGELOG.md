@@ -20,6 +20,15 @@ in lockstep) was the only deployed consumer:
 - **Network-change event: `chainChanged`** (KIP-12 / EIP-1193 name); `networkChanged` removed from
   the `on()` type.
 
+### Added — full KIP-12 method surface (1:1 with `kip-0012/interfaces.ts`)
+
+The provider type now matches the KIP's formal interfaces exactly: `sendTransaction` (§4.2, sompi
+string), `signPskb`/`broadcastPskb` (§4.3), the typed `request()` escape hatch with `KaspaRequestMap`
+(§7), standard error codes `KIP12_ERRORS`/`Kip12Error` (§8), and named `KaspaSignPsktArg` /
+`KaspaSimpleTransfer` / `KaspaProviderEventMap` types. All additive and OPTIONAL — a wallet that
+implemented only 0.2.0's earlier subset still conforms. The runtime helpers
+(`announceKaspaWallet`/`requestKaspaWallets`) are unchanged.
+
 Migration from 0.1.x: bump, rebuild, and update any literal comparisons of event names or network
 ids to the values above. A 0.1.x peer will neither see nor be seen by a 0.2.0 peer — update both
 sides together.

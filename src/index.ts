@@ -13,6 +13,11 @@
 // `chainChanged`. The v0.1 names (`kaspa:announceProvider`, `kaspa_mainnet`, `networkChanged`) are gone —
 // a clean break, made while KRON was the only deployed consumer (updated in lockstep). From here the
 // wire contract evolves per KIP-12 itself: add-only fields/methods; breaking = new event name.
+//
+// The type surface below is kept at 1:1 parity with the KIP's formal interfaces (`kip-0012/interfaces.ts`
+// in kaspanet/kips) — same provider methods, `request()` registry, event map, and error codes. The two
+// runtime helpers (announce/request) implement the discovery handshake + receiver-side security filters
+// that the spec describes; a wallet/dApp gets a correct, zero-dependency implementation for free.
 
 // ============================================================================================
 // Part 1 — Provider interface
@@ -54,6 +59,68 @@ export type KaspaProviderInfo = {
  *  KRON uses today); a wallet MUST refuse a type it does not implement rather than guess. */
 export type KaspaSignInput = { index: number; sighashType: number };
 
+/** Argument of {@link KaspaProvider.signPskt}: a Kaspa Safe-JSON transaction plus the explicit list of
+ *  inputs to sign. The wallet MUST sign ONLY these inputs and leave the rest untouched (fund-safety). */
+export interface KaspaSignPsktArg {
+  txJsonString: string;
+  options: { signInputs: KaspaSignInput[] };
+}
+
+/** Simple transfer (SPEC §4.2). Amount is sompi as a base-10 **string** — float KAS is FORBIDDEN in the
+ *  wire contract: IEEE-754 doubles cannot represent every sompi value exactly, and a rounding error in an
+ *  amount is a fund-safety defect. */
+export interface KaspaSimpleTransfer {
+  to: string;
+  amountSompi: string;
+}
+
+/** Provider events and their payloads (SPEC §6). */
+export interface KaspaProviderEventMap {
+  /** The authorized account list changed (switch, revoke). */
+  accountsChanged: string[];
+  /** The wallet switched networks; payload is a network id (see {@link KaspaNetworkId}). */
+  chainChanged: string;
+}
+
+export type KaspaProviderEvent = keyof KaspaProviderEventMap;
+
+/** Canonical `request()` registry (SPEC §7): every §3 method under a namespaced name, so a
+ *  `request()`-only client stays possible. Future KIPs/protocols extend this map via declaration
+ *  merging; wallets serve vendor methods under their own namespace (e.g. `"rift:…"`). */
+export interface KaspaRequestMap {
+  'kaspa:requestAccounts': { args: []; result: string[] };
+  'kaspa:getAccounts': { args: []; result: string[] };
+  'kaspa:getNetwork': { args: []; result: string };
+  'kaspa:switchNetwork': { args: [networkId: string]; result: void };
+  'kaspa:getPublicKey': { args: []; result: string };
+  'kaspa:signMessage': { args: [message: string]; result: string };
+  'kaspa:signPskt': { args: [arg: KaspaSignPsktArg]; result: string };
+  'kaspa:sendTransaction': { args: [tx: KaspaSimpleTransfer]; result: string };
+  'kaspa:signPskb': { args: [pskb: string]; result: string };
+  'kaspa:broadcastPskb': { args: [pskb: string]; result: string[] };
+  'kaspa:disconnect': { args: [origin?: string]; result: void };
+}
+
+export type KaspaRequestMethod = keyof KaspaRequestMap;
+
+/** Standard rejection codes (SPEC §8, mirroring EIP-1193 for developer familiarity). */
+export const KIP12_ERRORS = {
+  /** The user rejected the request. */
+  USER_REJECTED: 4001,
+  /** The origin is not authorized (call `requestAccounts` first). */
+  UNAUTHORIZED: 4100,
+  /** The wallet does not support the requested method. */
+  UNSUPPORTED_METHOD: 4200,
+  /** The wallet is locked or unavailable. */
+  WALLET_UNAVAILABLE: 4900,
+} as const;
+
+export interface Kip12Error {
+  message: string;
+  code?: number | string;
+  details?: unknown;
+}
+
 /**
  * The raw provider surface a wallet exposes. Deliberately shaped like the widely-deployed injected APIs
  * (KasWare's `window.kasware`) so an existing wallet can usually announce its injected object as-is.
@@ -79,12 +146,27 @@ export interface KaspaProvider {
   getPublicKey?(): Promise<string>;
   /** KIP-5 message signing; resolves to the Schnorr signature hex. */
   signMessage?(message: string): Promise<string>;
-  /** Sign ONLY the listed inputs of a Kaspa Safe-JSON transaction and return the signed Safe JSON. */
-  signPskt?(arg: { txJsonString: string; options: { signInputs: KaspaSignInput[] } }): Promise<string>;
+  /** Sign ONLY the listed inputs of a Kaspa Safe-JSON transaction and return the signed Safe JSON —
+   *  the covenant-grade signing primitive (fund-safety rules apply). */
+  signPskt?(arg: KaspaSignPsktArg): Promise<string>;
+  /** Simple transfer (SPEC §4.2); resolves to the transaction id. */
+  sendTransaction?(tx: KaspaSimpleTransfer): Promise<string>;
+  /** Sign a PSKB bundle (SPEC §4.3); the per-input discipline of {@link signPskt} applies. */
+  signPskb?(pskb: string): Promise<string>;
+  /** Broadcast a signed PSKB; resolves to transaction ids. */
+  broadcastPskb?(pskb: string): Promise<string[]>;
   disconnect?(origin?: string): Promise<void>;
-  /** `chainChanged` is the KIP-12 network-change event (payload: canonical network id). */
-  on?(event: 'accountsChanged' | 'chainChanged', handler: (...args: any[]) => void): void;
-  removeListener?(event: string, handler: (...args: any[]) => void): void;
+  /** Subscribe to a provider event; the handler payload is inferred from the event
+   *  ({@link KaspaProviderEventMap}). `chainChanged` is the KIP-12 network-change event. */
+  on?<E extends KaspaProviderEvent>(event: E, handler: (payload: KaspaProviderEventMap[E]) => void): void;
+  removeListener?<E extends KaspaProviderEvent>(event: E, handler: (payload: KaspaProviderEventMap[E]) => void): void;
+  /** Typed protocol-extension escape hatch (SPEC §7). Extends the surface, never the privileges — a
+   *  method served here is still subject to the authorization gate and fund-safety rules. An unknown
+   *  method MUST reject with code 4200 ({@link KIP12_ERRORS}). */
+  request?<M extends KaspaRequestMethod>(
+    method: M,
+    args: KaspaRequestMap[M]['args'],
+  ): Promise<KaspaRequestMap[M]['result']>;
 }
 
 // ============================================================================================

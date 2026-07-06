@@ -5,6 +5,7 @@ import {
   KASPA_ANNOUNCE_PROVIDER_EVENT,
   KASPA_REQUEST_PROVIDER_EVENT,
   KASPA_NETWORKS,
+  KIP12_ERRORS,
   normalizeKaspaNetworkId,
   type KaspaProvider,
 } from './index';
@@ -104,6 +105,31 @@ describe('discovery handshake', () => {
       detail: Object.freeze({ info: Object.freeze(info({ name: 'OldWallet' })), provider: provider() }),
     }));
     expect(cb).not.toHaveBeenCalled();
+  });
+
+  it('a full provider (every optional method + request()) satisfies the interface', () => {
+    // Compile-time parity check: if the KIP added a method the package lacks, this stops typechecking.
+    const full: KaspaProvider = {
+      requestAccounts: async () => ['kaspa:q'],
+      getAccounts: async () => [],
+      getNetwork: async () => KASPA_NETWORKS.TESTNET_10,
+      switchNetwork: async () => {},
+      getPublicKey: async () => 'ab',
+      signMessage: async () => 'sig',
+      signPskt: async ({ txJsonString }) => txJsonString,
+      sendTransaction: async ({ amountSompi }) => amountSompi,
+      signPskb: async (p) => p,
+      broadcastPskb: async () => ['txid'],
+      disconnect: async () => {},
+      on: (_e, _h) => {},
+      removeListener: (_e, _h) => {},
+      request: async (m) => {
+        if (m === 'kaspa:requestAccounts') return [] as never;
+        return undefined as never;
+      },
+    };
+    expect(typeof full.request).toBe('function');
+    expect(KIP12_ERRORS.UNSUPPORTED_METHOD).toBe(4200);
   });
 
   it('normalizes kaspa_-prefixed network ids (KasWare dialect) to canonical', () => {
