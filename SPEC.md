@@ -44,14 +44,14 @@ method is **optional** and MUST be capability-checked by the dApp (`typeof p.sig
 | Method | Required | Purpose |
 |---|---|---|
 | `requestAccounts(): Promise<string[]>` | **yes** | Connect (prompt if needed); resolve to authorized addresses, active first. |
-| `getAccounts(): Promise<string[]>` | no | Already-authorized accounts **without** prompting → silent session restore. |
+| `getAccounts(): Promise<string[]>` | no | Already-authorized accounts **without** prompting → silent session restore. De-facto extension beyond KIP-12. |
 | `getNetwork(): Promise<string>` | no | Current network id (§6). |
-| `switchNetwork(id): Promise<void>` | no | Request a network switch. |
+| `switchNetwork(id): Promise<void>` | no | Request a network switch. De-facto extension beyond KIP-12. |
 | `getPublicKey(): Promise<string>` | no | Active account public key hex (compressed or x-only). |
 | `signMessage(msg): Promise<string>` | no | KIP-5 message signing → Schnorr signature hex. |
 | `signPskt({ txJsonString, options }): Promise<string>` | no | Sign specific inputs of a transaction (§4). |
-| `disconnect(origin?): Promise<void>` | no | Drop the site's authorization. |
-| `on / removeListener(event, handler)` | no | `accountsChanged`, `chainChanged`. |
+| `disconnect(origin?): Promise<void>` | no | Drop the site's authorization (the `origin` param is a de-facto extension). |
+| `on / removeListener(event, handler)` | no | `chainChanged` (KIP-12), `accountsChanged` (de-facto extension). |
 
 A wallet that implements only `requestAccounts` is valid — it will connect and display balances in a
 dApp, which simply disables features that need the missing methods.
@@ -93,9 +93,11 @@ Two events on `window`, mirroring EIP-6963 replay semantics:
 
 ```ts
 type KaspaProviderInfo = {
-  uuid: string;   // UUIDv4, fresh per page load — instance identity / dedupe
-  name: string;   // human label, e.g. "Kastle"
-  icon: string;   // data: URI (SVG/PNG); dApps MUST refuse remote URLs
+  id: string;        // wallet identifier (KIP-12 `id`, e.g. the extension id)
+  name: string;      // human label, e.g. "Kastle"
+  icon: string;      // data: URI (SVG/PNG); dApps MUST refuse remote URLs
+  methods: string[]; // KIP-12 wire methods served, e.g. "kaspa:signPskt" — capability advertisement
+  uuid: string;      // UUIDv4, fresh per page load — instance identity / dedupe
   rdns?: string;  // reverse-DNS id, e.g. "com.kasware" — STABLE across loads; used for session restore
 };
 type KaspaProviderDetail = { info: KaspaProviderInfo; provider: KaspaProvider };

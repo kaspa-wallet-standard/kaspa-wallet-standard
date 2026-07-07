@@ -14,10 +14,11 @@
 // a clean break, made while KRON was the only deployed consumer (updated in lockstep). From here the
 // wire contract evolves per KIP-12 itself: add-only fields/methods; breaking = new event name.
 //
-// The type surface below is kept at 1:1 parity with the KIP's formal interfaces (`kip-0012/interfaces.ts`
-// in kaspanet/kips) — same provider methods, `request()` registry, event map, and error codes. The two
-// runtime helpers (announce/request) implement the discovery handshake + receiver-side security filters
-// that the spec describes; a wallet/dApp gets a correct, zero-dependency implementation for free.
+// The type surface below follows the KIP's formal interfaces (`kip-0012/interfaces.ts` in kaspanet/kips):
+// canonical wire values, the KIP's `request()` registry, provider shape, and error codes — plus a few
+// de-facto extras (marked as such) that the spec leaves to vendor extensions. The two runtime helpers
+// (announce/request) implement the discovery handshake + receiver-side security filters the spec
+// describes; a wallet/dApp gets a correct, zero-dependency implementation for free.
 
 // ============================================================================================
 // Part 1 — Provider interface
@@ -42,14 +43,19 @@ export const normalizeKaspaNetworkId = (id: string): string =>
 
 /** Identity a wallet announces about itself. `name`/`icon` are DISPLAY hints — never trust signals. */
 export type KaspaProviderInfo = {
-  /** UUIDv4, freshly generated per page load — instance identity, used only for dedupe. */
-  uuid: string;
+  /** Wallet identifier (KIP-12 `id`, e.g. the extension id). */
+  id: string;
   /** Human-readable wallet name shown in pickers, e.g. "Kastle". */
   name: string;
   /** Wallet icon as a `data:` URI (SVG/PNG) — a DISPLAY hint, never a trust signal. A remote URL is a
    *  tracking/spoofing vector, so the dApp-side {@link requestKaspaWallets} STRIPS any non-`data:` icon
    *  (delivers it as `''`) — a dApp can never be handed a remote URL through the handshake. */
   icon: string;
+  /** The KIP-12 wire methods this wallet serves (see {@link KASPA_METHODS}) — capability
+   *  advertisement before the user ever connects. */
+  methods: readonly KaspaRequestMethod[];
+  /** UUIDv4, freshly generated per page load — instance identity, used only for dedupe. */
+  uuid: string;
   /** Reverse-DNS identifier, e.g. "com.kasware" — STABLE across page loads and versions. Strongly
    *  recommended: it is what lets a dApp silently restore a session with your wallet after a reload. */
   rdns?: string;
@@ -74,9 +80,15 @@ export interface KaspaSimpleTransfer {
   amountSompi: string;
 }
 
-/** Provider events and their payloads (SPEC §6). */
+// Wire encodings (the KIP's aliases): hex-encoded bytes, and a serialized PSKB as produced by the
+// WASM SDK.
+export type HexString = string;
+export type PSKB = string;
+
+/** Provider events and their payloads (SPEC §6). `chainChanged` is the KIP-12 network-change event;
+ *  `accountsChanged` is a de-facto extension. */
 export interface KaspaProviderEventMap {
-  /** The authorized account list changed (switch, revoke). */
+  /** The authorized account list changed (switch, revoke). De-facto extension, not part of KIP-12. */
   accountsChanged: string[];
   /** The wallet switched networks; payload is a network id (see {@link KaspaNetworkId}). */
   chainChanged: string;
@@ -84,24 +96,44 @@ export interface KaspaProviderEventMap {
 
 export type KaspaProviderEvent = keyof KaspaProviderEventMap;
 
-/** Canonical `request()` registry (SPEC §7): every §3 method under a namespaced name, so a
- *  `request()`-only client stays possible. Future KIPs/protocols extend this map via declaration
- *  merging; wallets serve vendor methods under their own namespace (e.g. `"rift:…"`). */
+/** Canonical `request()` registry (SPEC §7): the KIP-12 wire methods, exactly as the KIP's
+ *  `KIP12MethodArgs`/`KIP12MethodResult` maps define them. Future KIPs/protocols extend this map via
+ *  declaration merging; wallets serve vendor methods under their own namespace (e.g. `"rift:…"`). */
 export interface KaspaRequestMap {
+  'kaspa:connect': { args: []; result: string };
+  'kaspa:disconnect': { args: []; result: string };
   'kaspa:requestAccounts': { args: []; result: string[] };
-  'kaspa:getAccounts': { args: []; result: string[] };
-  'kaspa:getNetwork': { args: []; result: string };
-  'kaspa:switchNetwork': { args: [networkId: string]; result: void };
-  'kaspa:getPublicKey': { args: []; result: string };
-  'kaspa:signMessage': { args: [message: string]; result: string };
+  'kaspa:chainId': { args: []; result: string };
+  'kaspa:getPublicKey': { args: []; result: HexString };
+  'kaspa:send': { args: [pskb: HexString]; result: HexString[] };
+  'kaspa:sign': { args: [pskb: PSKB]; result: HexString };
+  'kaspa:broadcast': { args: [pskb: HexString]; result: HexString };
+  'kaspa:signPersonal': { args: [message: string]; result: HexString };
+  'kaspa:sendTransaction': { args: [tx: KaspaSimpleTransfer]; result: HexString };
+  // safe JSON representation of the Transaction
+  'kaspa:signTransaction': { args: [txJsonString: string]; result: HexString };
+  'kaspa:broadcastTransaction': { args: [tx: HexString]; result: HexString };
   'kaspa:signPskt': { args: [arg: KaspaSignPsktArg]; result: string };
-  'kaspa:sendTransaction': { args: [tx: KaspaSimpleTransfer]; result: string };
-  'kaspa:signPskb': { args: [pskb: string]; result: string };
-  'kaspa:broadcastPskb': { args: [pskb: string]; result: string[] };
-  'kaspa:disconnect': { args: [origin?: string]; result: void };
 }
 
 export type KaspaRequestMethod = keyof KaspaRequestMap;
+
+/** The KIP-12 method registry as a value — e.g. for a wallet's announced `info.methods`. */
+export const KASPA_METHODS = [
+  'kaspa:connect',
+  'kaspa:disconnect',
+  'kaspa:requestAccounts',
+  'kaspa:chainId',
+  'kaspa:getPublicKey',
+  'kaspa:send',
+  'kaspa:sign',
+  'kaspa:broadcast',
+  'kaspa:signPersonal',
+  'kaspa:sendTransaction',
+  'kaspa:signTransaction',
+  'kaspa:broadcastTransaction',
+  'kaspa:signPskt',
+] as const satisfies readonly KaspaRequestMethod[];
 
 /** Standard rejection codes (SPEC §8, mirroring EIP-1193 for developer familiarity). */
 export const KIP12_ERRORS = {
@@ -137,10 +169,12 @@ export interface Kip12Error {
 export interface KaspaProvider {
   /** Connect: prompt the user if needed; resolve to the authorized address list (active address first). */
   requestAccounts(): Promise<string[]>;
-  /** Already-authorized accounts WITHOUT prompting (empty array if none) — enables silent session restore. */
+  /** Already-authorized accounts WITHOUT prompting (empty array if none) — enables silent session
+   *  restore. De-facto extension, not part of KIP-12. */
   getAccounts?(): Promise<string[]>;
   /** Current network id (see {@link KaspaNetworkId}). */
   getNetwork?(): Promise<string>;
+  /** De-facto extension, not part of KIP-12 (dApps treat it as best-effort). */
   switchNetwork?(networkId: string): Promise<void>;
   /** The active account's public key hex (compressed 33-byte or x-only 32-byte — both accepted). */
   getPublicKey?(): Promise<string>;
@@ -149,12 +183,9 @@ export interface KaspaProvider {
   /** Sign ONLY the listed inputs of a Kaspa Safe-JSON transaction and return the signed Safe JSON —
    *  the covenant-grade signing primitive (fund-safety rules apply). */
   signPskt?(arg: KaspaSignPsktArg): Promise<string>;
-  /** Simple transfer (SPEC §4.2); resolves to the transaction id. */
-  sendTransaction?(tx: KaspaSimpleTransfer): Promise<string>;
-  /** Sign a PSKB bundle (SPEC §4.3); the per-input discipline of {@link signPskt} applies. */
-  signPskb?(pskb: string): Promise<string>;
-  /** Broadcast a signed PSKB; resolves to transaction ids. */
-  broadcastPskb?(pskb: string): Promise<string[]>;
+  /** Establish a connection without returning accounts (KIP-12; `requestAccounts` does both). */
+  connect?(): Promise<void>;
+  /** The `origin` parameter is a de-facto extension — KIP-12's disconnect takes no arguments. */
   disconnect?(origin?: string): Promise<void>;
   /** Subscribe to a provider event; the handler payload is inferred from the event
    *  ({@link KaspaProviderEventMap}). `chainChanged` is the KIP-12 network-change event. */

@@ -29,9 +29,11 @@ import { announceKaspaWallet } from 'kaspa-wallet-standard';
 
 announceKaspaWallet(
   {
-    uuid: crypto.randomUUID(),          // fresh per page load
+    id: 'your-extension-id',            // wallet identifier (KIP-12 `id`)
     name: 'YourWallet',
     icon: 'data:image/svg+xml;base64,…', // data: URI only
+    methods: ['kaspa:requestAccounts', 'kaspa:chainId', 'kaspa:signPskt'], // wire methods you serve
+    uuid: crypto.randomUUID(),          // fresh per page load
     rdns: 'com.yourwallet',             // STABLE id — enables silent session restore after reload
   },
   provider,                              // your provider object (see below)

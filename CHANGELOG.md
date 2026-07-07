@@ -3,6 +3,32 @@
 All notable changes to this package are documented here. This project follows
 [Semantic Versioning](https://semver.org).
 
+## 0.3.0
+
+### Changed — aligned with the finalized KIP-12 draft (BREAKING)
+
+Tracks the KIP-12 document as prepared for the kaspanet/kips PR — the KIP remains the authoritative
+specification and this package follows it, never the reverse:
+
+- **`KaspaProviderInfo` now requires `id` and `methods`** — the KIP's required announce fields
+  (`methods` advertises the wire methods a wallet serves before the user ever connects). New export
+  `KASPA_METHODS` = the KIP-12 method registry as a value. dApp-side `requestKaspaWallets()` stays
+  lenient and still surfaces announces without them.
+- **`KaspaRequestMap` now carries the KIP's canonical wire methods** — `kaspa:connect`,
+  `kaspa:disconnect`, `kaspa:requestAccounts`, `kaspa:chainId`, `kaspa:getPublicKey`, `kaspa:send`,
+  `kaspa:sign`, `kaspa:broadcast`, `kaspa:signPersonal`, `kaspa:sendTransaction`,
+  `kaspa:signTransaction`, `kaspa:broadcastTransaction`, `kaspa:signPskt`. The interim
+  `kaspa:getNetwork` / `kaspa:signMessage` / `kaspa:signPskb` / `kaspa:broadcastPskb` /
+  `kaspa:getAccounts` / `kaspa:switchNetwork` entries are gone — they were never part of the KIP's
+  wire registry.
+- **Typed provider surface follows the KIP**: `connect?()` added; `sendTransaction` / `signPskb` /
+  `broadcastPskb` removed as typed methods (reach them through `request()`); `getAccounts` /
+  `switchNetwork` / `disconnect(origin)` / `accountsChanged` remain but are documented as de-facto
+  extensions beyond the KIP.
+- New `HexString` / `PSKB` aliases (the KIP's wire encodings).
+- Discovery is events-only, matching the final KIP (which dropped the optional `window.kaspaProvider`
+  global entirely; this package never shipped one). Runtime helper behavior is unchanged.
+
 ## 0.2.0
 
 ### Changed — KIP-12 (BREAKING: clean cutover to canonical naming)

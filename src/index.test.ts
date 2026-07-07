@@ -5,6 +5,7 @@ import {
   KASPA_ANNOUNCE_PROVIDER_EVENT,
   KASPA_REQUEST_PROVIDER_EVENT,
   KASPA_NETWORKS,
+  KASPA_METHODS,
   KIP12_ERRORS,
   normalizeKaspaNetworkId,
   type KaspaProvider,
@@ -12,9 +13,11 @@ import {
 
 const provider = (): KaspaProvider => ({ requestAccounts: async () => ['kaspa:qtest'] });
 const info = (over: Partial<{ uuid: string; name: string; rdns: string }> = {}) => ({
+  id: 'test-wallet',
   uuid: crypto.randomUUID(),
   name: 'TestWallet',
   icon: 'data:image/svg+xml;base64,PHN2Zy8+',
+  methods: ['kaspa:requestAccounts'] as const,
   rdns: 'com.test.wallet',
   ...over,
 });
@@ -90,11 +93,17 @@ describe('discovery handshake', () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
-  it('exposes the canonical (KIP-12) event names and network ids', () => {
+  it('exposes the canonical (KIP-12) event names, network ids, and method registry', () => {
     expect(KASPA_ANNOUNCE_PROVIDER_EVENT).toBe('kaspa:provider');
     expect(KASPA_REQUEST_PROVIDER_EVENT).toBe('kaspa:requestProvider');
     expect(KASPA_NETWORKS.MAINNET).toBe('mainnet');
     expect(KASPA_NETWORKS.TESTNET_10).toBe('testnet-10');
+    // Wire names are the KIP's, not the retired interim dialect.
+    expect(KASPA_METHODS).toContain('kaspa:chainId');
+    expect(KASPA_METHODS).toContain('kaspa:signPersonal');
+    expect(KASPA_METHODS).toContain('kaspa:signPskt');
+    expect(KASPA_METHODS).not.toContain('kaspa:getNetwork');
+    expect(KASPA_METHODS).not.toContain('kaspa:signPskb');
   });
 
   it('ignores the pre-KIP announce event name entirely (clean cutover)', () => {
@@ -117,9 +126,7 @@ describe('discovery handshake', () => {
       getPublicKey: async () => 'ab',
       signMessage: async () => 'sig',
       signPskt: async ({ txJsonString }) => txJsonString,
-      sendTransaction: async ({ amountSompi }) => amountSompi,
-      signPskb: async (p) => p,
-      broadcastPskb: async () => ['txid'],
+      connect: async () => {},
       disconnect: async () => {},
       on: (_e, _h) => {},
       removeListener: (_e, _h) => {},
